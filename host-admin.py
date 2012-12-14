@@ -8,6 +8,7 @@
 #     aes.py      - aes encryption
 #     gnu tar     - archive
 #     mutt        - send mail
+#     mysql       - mysql database backup
 #     dropbox sdk - required for dropbox backup
 # history:
 #     0.0.3    2012.11.27    add dropbox support
