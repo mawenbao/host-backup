@@ -152,7 +152,7 @@ if options.backup:
             arcCmd += " --exclude-vcs"
         if excludePattern and excludePattern != emptyStr:
             arcCmd += " --exclude=%s" % (excludePattern.strip().replace(":", " --exclude="))
-        os.system("%s -cjf %s %s" % (arcCmd, filesBackupArchive, " ".join(fileList)))
+        os.system("%s -cjhf %s %s" % (arcCmd, filesBackupArchive, " ".join(fileList)))
     else:
         print("No files need to be backed up")
     # backup code repository
