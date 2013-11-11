@@ -23,8 +23,18 @@
 # ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 # DEALINGS IN THE SOFTWARE.
 
-import os, sys, time, getpass, ConfigParser, optparse, commands, binascii, tempfile
+import os, sys, time, getpass, ConfigParser, optparse, commands, binascii, tempfile, subprocess
 import aes
+
+# helper function that run a cmd and return (stdout, stderr)
+def run_cmd(cmdStr):
+    cmdList = cmdStr.split()
+    proc = subprocess.Popen(cmdList, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+    if stderr:
+        stderr = "[ERROR] %s:\n%s" % (cmdList[0], stderr)
+    return stdout, stderr
+
 # cmd options
 parser = optparse.OptionParser()
 parser.add_option("-c", "--config", dest="config", default="backup-config.ini", help="Path of the config file.")
@@ -131,6 +141,9 @@ repoBackupArchive = "%s/host-repo-backup-%s.tar.bz2" % (tmpDir, currTime)
 configFile = os.path.basename(options.config)
 configFileAbs = os.path.abspath(configFile)
 
+# store error output when doing the backup
+backupErrorMsg = ""
+
 if options.backup:
     # backup db
     print("Backup db...")
@@ -139,9 +152,12 @@ if options.backup:
         for db in dbList:
             dbBackupFiles += (db + ".sql ")
             print("Backup db %s..." % (db))
-            backupCmd = "mysqldump -uroot -p%s -B %s > %s/%s.sql" % (dbPass, db, tmpDir, db)
-            os.system(backupCmd)
-        os.system("tar -C %s -cjf %s %s" % (tmpDir, dbBackupArchive, dbBackupFiles))
+            backupCmd = "mysqldump -uroot -p%s -B %s" % (dbPass, db)
+            dbSqlContent, dbDumpError = run_cmd(backupCmd)
+            backupErrorMsg += dbDumpError
+            with open("%s/%s.sql" % (tmpDir, db), "w") as f:
+                f.write(dbSqlContent)
+        backupErrorMsg += run_cmd("tar -C %s -cjf %s %s" % (tmpDir, dbBackupArchive, dbBackupFiles))[1]
     else:
         print("No databases need to be backed up")
     # backup files in fileList
@@ -152,7 +168,7 @@ if options.backup:
             arcCmd += " --exclude-vcs"
         if excludePattern and excludePattern != emptyStr:
             arcCmd += " --exclude=%s" % (excludePattern.strip().replace(":", " --exclude="))
-        os.system("%s -cjhf %s %s" % (arcCmd, filesBackupArchive, " ".join(fileList)))
+        backupErrorMsg += run_cmd("%s -cjhf %s %s" % (arcCmd, filesBackupArchive, " ".join(fileList)))[1]
     else:
         print("No files need to be backed up")
     # backup code repository
@@ -175,12 +191,12 @@ if options.backup:
                 for rd in repoDirs:
                     os.chdir(os.path.join(repoRoot, rd))
                     print("Backup repository %s/%s..." % (repoRoot, rd))
-                    os.system("git bundle create %s/%s.bundle --all" % (tmpDir, rd))
+                    backupErrorMsg += run_cmd("git bundle create %s/%s.bundle --all" % (tmpDir, rd))[1]
                     repoBackupFiles += ("%s.bundle " % rd)
                 # return to previous directory
                 os.chdir(currDirAbs)
                 # archive git bundles
-                os.system("tar -C %s -cjf %s %s" % (tmpDir, repoBackupArchive, repoBackupFiles))
+                backupErrorMsg += run_cmd("tar -C %s -cjf %s %s" % (tmpDir, repoBackupArchive, repoBackupFiles))[1]
     # archive all backup files including the config file
     allBackupFiles = ""
     if os.path.exists(dbBackupArchive):
@@ -191,14 +207,14 @@ if options.backup:
         allBackupFiles += (" " + os.path.basename(repoBackupArchive))
 
     print("Archive all backup files to %s..." % (allBackupArchive))
-    os.system("tar -C %s -cf %s %s" % (tmpDir, allBackupArchive, allBackupFiles))
+    backupErrorMsg += run_cmd("tar -C %s -cf %s %s" % (tmpDir, allBackupArchive, allBackupFiles))[1]
     # send backup file via email
     mailList = configParser.get(EmailSection, "Mail_List")
     if backupWithEmail != emptyStr and mailList != emptyStr:
         # check mutt existence
         ret = commands.getstatusoutput("mutt --help")[0]
         if ret != 0:
-            print("Mutt not found. Please install mutt with `apt-get install' mutt first." )
+            print("Mutt not found. Please install mutt with `apt-get install mutt' first." )
         else:
             print("Send backup archive via email...")
             ret, hostname = commands.getstatusoutput("hostname")
@@ -206,6 +222,8 @@ if options.backup:
                 hostname = "unknown host"
             mailSubject = "host backup on %s from %s" % (plainTime, hostname)
             mailContent = mailSubject
+            if backupErrorMsg:
+                mailContent += ("\n\nError messages:\n" + backupErrorMsg)
             muttCmd = "echo '%s' | mutt -a '%s' -s '%s' -- %s" % (mailContent, allBackupArchive, mailSubject, mailList.replace(":", " "))
             os.system(muttCmd)
     # send backup file to dropbox
