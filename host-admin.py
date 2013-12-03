@@ -136,7 +136,7 @@ class BackupConfig(object):
             self.dropboxPassStr = self.configParser.get(self.DropboxSection, "Password")
             if self.dropboxPassStr:
                 self.dropboxPassStr = self.dropboxPassStr.strip()
-            if not self.dropboxUser or self.gEmptyStr == self.dropboxUser:
+            if not self.dropboxUser or gEmptyStr == self.dropboxUser:
                 self.dropboxUser = raw_input("Your user name for dropbox: ")
                 self.configParser.set(self.DropboxSection, "User", self.dropboxUser)
                 self.dropboxPassStr = ""
@@ -164,23 +164,23 @@ class BackupConfig(object):
         if not self.dbList:
             return False
 
-        if not dbUser or dbUser == gEmptyStr:
-            dbUser = raw_input("Your user name for mysql: ")
+        if not self.dbUser or self.dbUser == gEmptyStr:
+            self.dbUser = raw_input("Your user name for mysql: ")
             self.configParser.set(MysqlSection, "User", dbUser)
-            dbPassStr = ""
-        if not dbPassStr or dbPassStr == gEmptyStr:
+            self.dbPassStr = ""
+        if not self.dbPassStr or self.dbPassStr == gEmptyStr:
             dbPass = getpass.getpass("Your password for mysql user %s: " % (dbUser))
             dbPassKey = aes.generateRandomKey(16)
             # set password with aes encryption
             tmpPass = aes.encryptData(dbPassKey, dbPass)
-            self.configParser.set(MysqlSection, "Password", tmpPass.encode("hex") + sepChar + dbPassKey.encode("hex"))
+            self.configParser.set(self.MysqlSection, "Password", tmpPass.encode("hex") + gSepChar + dbPassKey.encode("hex"))
         else:
-            dbPass, dbPassKey = dbPassStr.split(":")
-            dbPass = aes.decryptData(binascii.unhexlify(dbPassKey), binascii.unhexlify(dbPass))
+            self.dbPass, self.dbPassKey = self.dbPassStr.split(":")
+            self.dbPass = aes.decryptData(binascii.unhexlify(self.dbPassKey), binascii.unhexlify(self.dbPass))
         # verify mysql user and password
-        ret = commands.getstatusoutput("mysqlshow -u%s -p%s" % (dbUser, dbPass))[0]
+        ret = commands.getstatusoutput("mysqlshow -u%s -p%s" % (self.dbUser, self.dbPass))[0]
         if ret != 0:
-            print("Wrong name or password for mysql user %s, program exits." % (dbUser))
+            print("Wrong name or password for mysql user %s, program exits." % (self.dbUser))
             return False
 
         return True
@@ -205,7 +205,7 @@ def parse_cmd_options():
     return options, args
 
 def backup_db(backupConfig, dbBackupArchive):
-    global gBackupErrorMsg, gTmpDir 
+    global gBackupErrorMsg, gTmpDir
     # backup db
     print("Backup db...")
     if backupConfig.dbList:
@@ -224,7 +224,7 @@ def backup_db(backupConfig, dbBackupArchive):
 
 # backup files in fileList
 def backup_files(backupConfig, tempFilesArchive):
-    global gBackupErrorMsg 
+    global gBackupErrorMsg
     print("Backup files...")
     if backupConfig.fileList:
         arcCmd = "tar -C /"
@@ -237,7 +237,7 @@ def backup_files(backupConfig, tempFilesArchive):
         print("No files need to be backed up")
 
 def backup_repos(backupConfig, backupArchive):
-    global gBackupErrorMsg, gTmpDir 
+    global gBackupErrorMsg, gTmpDir
     # backup code repository
     print("Backup code repository...")
     repoDirs = os.listdir(backupConfig.repoRoot)
@@ -300,7 +300,7 @@ def upload_to_dropbox(backupConfig, backupArchive):
         print("Cannot upload backup file to dropbox: %s" % (e))
 
 def send_via_email(backupConfig, backupArchive):
-    global gBackupErrorMsg 
+    global gBackupErrorMsg
     # send backup file via email
     if backupConfig.backupWithEmail != gEmptyStr and backupConfig.mailList != gEmptyStr:
         print("Send backup archive via email...")
@@ -312,12 +312,11 @@ def send_via_email(backupConfig, backupArchive):
         if gBackupErrorMsg:
             mailContent += ("\n\nError messages:\n" + gBackupErrorMsg)
         muttCmd = "echo '%s' | mutt -a '%s' -s '%s' -- %s" % (mailContent, backupArchive, mailSubject, backupConfig.mailList.replace(":", " "))
-        print muttCmd
         os.system(muttCmd)
 
 def check_cmds():
     cmdList = [
-            "git --help", 
+            "git --help",
             "mutt --help",
             ]
 
@@ -404,6 +403,9 @@ if __name__ == "__main__":
 
     print("Archive all backup files to %s..." % (allBackupArchive))
     gBackupErrorMsg += run_cmd("tar -C %s -cf %s %s" % (gTmpDir, allBackupArchive, allBackupFiles))[1]
+
+    if gBackupErrorMsg:
+        print(gBackupErrorMsg)
 
     # send backup file via email
     if bkConfig.backupWithEmail != gEmptyStr and bkConfig.mailList != gEmptyStr:
