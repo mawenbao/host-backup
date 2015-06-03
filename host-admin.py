@@ -213,7 +213,7 @@ class BackupConfig(object):
                     (dbPort, dbConf.dbUser, dbConf.dbPass, gTmpDir)
             elif dbtype == self.MongoDBSection:
                 dbPort = "--port %s" % dbConf.dbPort if dbConf.dbPort != gEmptyStr else ""
-                dbConf.dumpCmd = "mongodb %s -u %s -p %s -d {0} -o %s/mongodb" % \
+                dbConf.dumpCmd = "mongodump %s -u %s -p %s -d {0} -o %s/mongodb" % \
                     (dbPort, dbConf.dbUser, dbConf.dbPass, gTmpDir)
             else:
                 print("Fatal error: database type %s is not supported" % dbtype)
@@ -248,11 +248,12 @@ def backup_db(backupConfig, dbBackupArchive):
         dbConf = backupConfig.dbConf.get(dbtype, None)
         if dbConf is not None and dbConf.dbList:
             print("Backup %s..." % dbtype)
+            if dbtype == backupConfig.MongoDBSection:
+                dbBackupFiles += "mongodb "
             for db in dbConf.dbList:
-                dbBackupFiles += (db + " ")
-                print(dbConf.dumpCmd.format(db))
+                if dbtype == backupConfig.MysqlSection:
+                    dbBackupFiles += (db + " ")
                 gBackupErrorMsg = run_cmd(dbConf.dumpCmd.format(db))[1]
-    print(gBackupErrorMsg)
     gBackupErrorMsg += run_cmd("tar -C %s -cjf %s %s" % (gTmpDir, dbBackupArchive, dbBackupFiles))[1]
 
 # backup files in fileList
