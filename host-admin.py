@@ -254,7 +254,8 @@ def backup_db(backupConfig, dbBackupArchive):
                 if dbtype == backupConfig.MysqlSection:
                     dbBackupFiles += (db + " ")
                 gBackupErrorMsg = run_cmd(dbConf.dumpCmd.format(db))[1]
-    gBackupErrorMsg += run_cmd("tar -C %s -cjf %s %s" % (gTmpDir, dbBackupArchive, dbBackupFiles))[1]
+    if dbBackupFiles:
+	gBackupErrorMsg += run_cmd("tar -C %s -cjf %s %s" % (gTmpDir, dbBackupArchive, dbBackupFiles))[1]
 
 # backup files in fileList
 def backup_files(backupConfig, tempFilesArchive):
