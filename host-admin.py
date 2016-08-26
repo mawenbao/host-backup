@@ -353,10 +353,10 @@ def send_via_email(backupConfig, backupArchive):
 
 def check_cmd_availability():
     cmdList = [
-            "git --version",
-            "mutt --help",
-            "mysqldump --version",
-            "mongodump --version",
+            #"git --version",
+            #"mutt --help",
+            #"mysqldump --version",
+            #"mongodump --version",
             "tar --version",
             ]
 
